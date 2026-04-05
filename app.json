@@ -34,15 +34,6 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#ffffff"
-          }
-        }
-      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth"
     ],
