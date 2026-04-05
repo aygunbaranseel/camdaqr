@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "351896923765",
+    "project_id": "camda-qr",
+    "storage_bucket": "camda-qr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:351896923765:android:2e7ccfac7e3fe4a566d23c",
+        "android_client_info": {
+          "package_name": "com.aygun.camdaQR"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiTuskGgdbgryNA7rISr1ibISH7yvJy_E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

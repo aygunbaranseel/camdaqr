@@ -21,7 +21,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.camdaQR"
+      "package": "com.aygun.camdaQR"
     },
     "web": {
       "output": "static",
