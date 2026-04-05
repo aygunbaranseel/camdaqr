@@ -1,10 +1,10 @@
 // context/AuthContext.tsx
-import { onAuthStateChanged, User } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../services/firebaseConfig';
+// YENİ: Web motoru yerine Native motoru içe aktarıyoruz
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 interface AuthProps {
-  user: User | null;
+  user: FirebaseAuthTypes.User | null; // Tip tanımlamasını Native motora göre güncelledik
   loading: boolean;
 }
 
@@ -16,18 +16,20 @@ const AuthContext = createContext<AuthProps>({
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Firebase'in dinleyicisi: Oturum açıldı mı, kapandı mı, eski oturum var mı?
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    // YENİ: Firebase Native'in dinleyicisi: Oturum açıldı mı, kapandı mı?
+    const unsubscribe = auth().onAuthStateChanged((currentUser) => {
       setUser(currentUser);
-      setLoading(false); // Kontrol bitti, loading'i kapat
+      if (loading) {
+        setLoading(false); // Kontrol bitti, loading'i kapat
+      }
     });
 
     return unsubscribe;
-  }, []);
+  }, [loading]);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
