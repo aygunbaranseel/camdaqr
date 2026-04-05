@@ -25,11 +25,9 @@ import {
 // --- YENİ İKONLAR (LUCIDE) ---
 import { AlertCircle, ArrowRight, ChevronLeft, Phone, ShieldCheck, XCircle } from 'lucide-react-native';
 
-// --- FIREBASE & SERVISLER ---
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
+// --- YENİ FIREBASE NATIVE AUTH ---
+import auth from '@react-native-firebase/auth';
 import { checkPhoneNumberExists } from '../services/authService';
-import { auth } from '../services/firebaseConfig';
 
 import HandPhoneIllustration from '../components/HandPhoneIllustration';
 
@@ -59,19 +57,21 @@ const CustomAnimation = {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const recaptchaVerifier = useRef(null);
 
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [verificationId, setVerificationId] = useState('');
+  
+  // YENİ: Firebase'den dönen onay (confirm) objesini tutuyoruz
+  const [confirm, setConfirm] = useState<any>(null);
+  
   const [errorMessage, setErrorMessage] = useState('');
 
   const phoneShake = useRef(new Animated.Value(0)).current;
   const otpShake = useRef(new Animated.Value(0)).current;
 
-  // KLAVYE ASANSÖR MANTIĞI - YUMUŞATILMIŞ
+  // KLAVYE ASANSÖR MANTIĞI
   const [isFocused, setIsFocused] = useState(false);
   const keyboardShift = useRef(new Animated.Value(0)).current;
 
@@ -81,8 +81,8 @@ export default function LoginScreen() {
 
     const keyboardDidShowListener = Keyboard.addListener(showEvent, () => {
       Animated.timing(keyboardShift, {
-        toValue: -90, // Daha az kaydırıldı
-        duration: 200, // Hızlandırıldı
+        toValue: -90,
+        duration: 200,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
@@ -156,13 +156,11 @@ export default function LoginScreen() {
       }
 
       const authFormat = `+90${cleanPhone}`;
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const vid = await phoneProvider.verifyPhoneNumber(
-        authFormat,
-        recaptchaVerifier.current!
-      );
       
-      setVerificationId(vid);
+      // YENİ: Firebase Native arka planda doğrulama yapar ve SMS atar
+      const confirmation = await auth().signInWithPhoneNumber(authFormat);
+      
+      setConfirm(confirmation);
       LayoutAnimation.configureNext(CustomAnimation);
       setStep('otp');
 
@@ -181,9 +179,13 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, otp);
-      await signInWithCredential(auth, credential);
-      router.replace('/(tabs)');
+      // YENİ: Sakladığımız confirm objesi ile kodu doğruluyoruz
+      if (confirm) {
+        await confirm.confirm(otp);
+        router.replace('/(tabs)');
+      } else {
+        triggerError("Doğrulama oturumu bulunamadı, lütfen tekrar deneyin.", otpShake);
+      }
     } catch (error) {
       triggerError("Girdiğiniz kod hatalı veya süresi dolmuş.", otpShake);
     }
@@ -201,37 +203,18 @@ export default function LoginScreen() {
         LayoutAnimation.configureNext(CustomAnimation);
         setStep('phone');
         setOtp('');
+        setConfirm(null);
     } else {
         router.replace('/');
     }
   };
 
   const isPhoneError = errorMessage.includes("telefon") || errorMessage.includes("SMS");
-  const isOtpError = errorMessage.includes("kod") || errorMessage.includes("süresi");
+  const isOtpError = errorMessage.includes("kod") || errorMessage.includes("süresi") || errorMessage.includes("oturum");
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-
-      {/* --- DEĞİŞTİRİLEN VE ŞIKLAŞTIRILAN RECAPTCHA BÖLÜMÜ --- */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={auth.app.options}
-        title="Güvenlik Doğrulaması"
-        cancelLabel="Kapat"
-        attemptInvisibleVerification={true} // reCAPTCHA'nın görünmeden arka planda çalışmasını dener
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} // Modalın arka plan karartması
-        containerStyle={{ 
-            backgroundColor: '#FFFFFF', 
-            borderRadius: 24, // Uygulama tasarımına uyan yuvarlak köşeler
-            overflow: 'hidden', 
-            width: '85%', 
-            alignSelf: 'center', 
-            marginTop: 'auto', 
-            marginBottom: 'auto',
-            maxHeight: 500, // Ekrana daha orantılı oturur
-        }}
-      />
 
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
@@ -266,7 +249,7 @@ export default function LoginScreen() {
                 {step === 'phone' ? "Hesabına giriş yapmak için telefon numaranı gir." : `+90 ${phone} numarasına gönderilen kodu girin.`}
               </Text>
 
-              {/* Sabit Yükseklikli Alan: Ekranların Zıplamasını Önler */}
+              {/* Sabit Yükseklikli Alan */}
               <View style={{ width: '100%', minHeight: 105, justifyContent: 'flex-start' }}>
                 {step === 'phone' ? (
                   <View style={{width: '100%'}}>
@@ -330,6 +313,7 @@ export default function LoginScreen() {
                     <TouchableOpacity style={styles.resendBtn} onPress={() => {
                         setStep('phone');
                         setOtp('');
+                        setConfirm(null);
                         Alert.alert("Bilgi", "Lütfen numaranızı kontrol edip tekrar deneyin.");
                     }}>
                       <Text style={styles.resendText}>{"Kod gelmedi mi? "} <Text style={{ fontWeight: '700', color: COLORS.primary }}>{"Tekrar Gönder"}</Text></Text>

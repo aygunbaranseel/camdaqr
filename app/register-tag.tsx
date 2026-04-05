@@ -47,11 +47,11 @@ import {
   XCircle
 } from 'lucide-react-native';
 
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
+// --- YENİ FIREBASE NATIVE AUTH ---
+import auth from '@react-native-firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { checkPhoneNumberExists, completeRegistration } from '../services/authService';
-import { auth, db } from '../services/firebaseConfig';
+import { db } from '../services/firebaseConfig';
 
 import CarIllustration from '../components/CarIllustration';
 import CommunicationIllustration from '../components/CommunicationIllustration';
@@ -186,21 +186,20 @@ export default function RegisterTagScreen() {
   const params = useLocalSearchParams();
   const activationCode = params.code || params.activationCode;
 
-  const recaptchaVerifier = useRef(null);
   const scrollViewRef = useRef<ScrollView>(null); 
-
   const plateLettersRef = useRef<TextInput>(null);
   const plateNumbersRef = useRef<TextInput>(null);
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [isOtpVisible, setIsOtpVisible] = useState(false);
-  const [verificationId, setVerificationId] = useState('');
+  
+  // YENİ: Native confirm objesi
+  const [confirm, setConfirm] = useState<any>(null);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -215,12 +214,10 @@ export default function RegisterTagScreen() {
   const [note, setNote] = useState('');
   const [blood, setBlood] = useState('');
 
-  // İLETİŞİM İZİNLERİ
   const [allowNotification, setAllowNotification] = useState(true);
   const [allowSms, setAllowSms] = useState(true);
   const [allowCall, setAllowCall] = useState(true);
 
-  // GÜVENLİK İZİNLERİ
   const [showName, setShowName] = useState(true);
   const [showBloodType, setShowBloodType] = useState(true);
   const [showFullPlate, setShowFullPlate] = useState(true);
@@ -256,7 +253,7 @@ export default function RegisterTagScreen() {
       Animated.timing(keyboardShift, {
         toValue: 0,
         duration: 200,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out(Easing.quad), 
         useNativeDriver: true,
       }).start();
     });
@@ -324,12 +321,13 @@ export default function RegisterTagScreen() {
     }
 
     try {
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const vid = await phoneProvider.verifyPhoneNumber(`+90${cleanPhone}`, recaptchaVerifier.current!);
-      setVerificationId(vid);
+      // YENİ: Native SMS gönderme
+      const confirmation = await auth().signInWithPhoneNumber(`+90${cleanPhone}`);
+      setConfirm(confirmation);
       setIsOtpVisible(true);
       LayoutAnimation.configureNext(CustomAnimation);
     } catch (error: any) {
+      console.error(error);
       triggerError("SMS gönderilemedi. Numaranızı kontrol edin.", phoneShake);
     }
     setLoading(false);
@@ -340,9 +338,13 @@ export default function RegisterTagScreen() {
     if ((otp || '').length < 6) return triggerError("Lütfen 6 haneli kodu girin.", otpShake);
     setLoading(true);
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, otp);
-      await signInWithCredential(auth, credential);
-      smoothStepChange(2);
+      // YENİ: Native kod doğrulama
+      if (confirm) {
+        await confirm.confirm(otp);
+        smoothStepChange(2);
+      } else {
+        triggerError("Doğrulama oturumu bulunamadı.", otpShake);
+      }
     } catch (error) {
       triggerError("Doğrulama kodu yanlış.", otpShake);
     }
@@ -399,7 +401,7 @@ export default function RegisterTagScreen() {
 
     if (result.success) {
       try {
-          const user = auth.currentUser;
+          const user = auth().currentUser;
           if (user) {
               await updateDoc(doc(db, 'users', user.uid), { registrationCompleted: true });
           }
@@ -445,6 +447,7 @@ export default function RegisterTagScreen() {
       LayoutAnimation.configureNext(CustomAnimation);
       setIsOtpVisible(false);
       setOtp('');
+      setConfirm(null);
       return;
     }
     step > 1 ? smoothStepChange(step - 1) : router.back();
@@ -469,9 +472,8 @@ export default function RegisterTagScreen() {
     );
   };
 
-  const isPhoneError = errorMessage.includes("telefon") || errorMessage.includes("kayıtlı");
-  // DEĞİŞİKLİK: Burada eksik olan isOtpError değişkenini tanımladık
-  const isOtpError = errorMessage.includes("kod") || errorMessage.includes("süresi") || errorMessage.includes("yanlış") || errorMessage.includes("doğrulama");
+  const isPhoneError = errorMessage.includes("telefon") || errorMessage.includes("kayıtlı") || errorMessage.includes("SMS");
+  const isOtpError = errorMessage.includes("kod") || errorMessage.includes("süresi") || errorMessage.includes("yanlış") || errorMessage.includes("doğrulama") || errorMessage.includes("oturum");
   const isFirstNameError = errorMessage.includes("adınızı");
   const isLastNameError = errorMessage.includes("soyadınızı");
   const isPlateError = errorMessage.includes("plaka");
@@ -481,31 +483,6 @@ export default function RegisterTagScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       <Stack.Screen options={{ headerShown: false }} />
-
-      {/* DEĞİŞİKLİK: Görünmez (Invisible) reCAPTCHA ve Modern Şık Modal */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={auth.app.options}
-        title="Güvenlik Doğrulaması"
-        cancelLabel="Kapat"
-        attemptInvisibleVerification={true}
-        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
-        containerStyle={{ 
-            backgroundColor: '#FFFFFF', 
-            borderRadius: 24, 
-            overflow: 'hidden', 
-            width: '85%', 
-            alignSelf: 'center', 
-            marginTop: 'auto', 
-            marginBottom: 'auto',
-            maxHeight: 520,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.2,
-            shadowRadius: 20,
-            elevation: 15,
-        }}
-      />
 
       {isTransitioning && (
         <View style={styles.transitionOverlay}>
@@ -621,6 +598,7 @@ export default function RegisterTagScreen() {
                       <TouchableOpacity style={styles.resendBtn} onPress={() => {
                           setIsOtpVisible(false);
                           setOtp('');
+                          setConfirm(null);
                           Alert.alert("Bilgi", "Lütfen numaranızı kontrol edip tekrar deneyin.");
                       }}>
                         <Text style={styles.resendText}>Kod gelmedi mi? <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tekrar Gönder</Text></Text>
