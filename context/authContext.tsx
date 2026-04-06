@@ -1,14 +1,12 @@
-// context/AuthContext.tsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
-// YENİ: Web motoru yerine Native motoru içe aktarıyoruz
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
-interface AuthProps {
-  user: FirebaseAuthTypes.User | null; // Tip tanımlamasını Native motora göre güncelledik
+interface AuthContextType {
+  user: FirebaseAuthTypes.User | null;
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthProps>({
+const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
 });
@@ -20,16 +18,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // YENİ: Firebase Native'in dinleyicisi: Oturum açıldı mı, kapandı mı?
+    // Sadece uygulama ilk açıldığında 1 kere dinleyici başlatılır
     const unsubscribe = auth().onAuthStateChanged((currentUser) => {
       setUser(currentUser);
-      if (loading) {
-        setLoading(false); // Kontrol bitti, loading'i kapat
-      }
+      setLoading(false); // Artık if (loading) kontrolüne gerek yok, doğrudan kapatıyoruz
     });
 
     return unsubscribe;
-  }, [loading]);
+  }, []); // <--- İŞTE BÜTÜN SORUN BURADAYDI! İÇİ KESİNLİKLE BOŞ OLMALIYDI.
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
