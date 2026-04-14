@@ -13,8 +13,6 @@ import { db } from '../services/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-
-// Icon
 import { QrCode } from 'lucide-react-native';
 
 SplashScreen.preventAutoHideAsync();
@@ -23,77 +21,67 @@ function RootLayoutNav() {
   const { user, loading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  
-  // 1. BU ÇOK ÖNEMLİ: Navigasyon sistemi hazır mı?
   const rootNavigationState = useRootNavigationState();
 
-  const [fontsLoaded] = useFonts({
-    ...Ionicons.font,
-  });
+  const [fontsLoaded] = useFonts({ ...Ionicons.font });
+  const [isDbChecked, setIsDbChecked] = useState(false);
 
-  const [isReady, setIsReady] = useState(false);
-
-  // Splash hide
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
 
-  // Auth + Route Guard
   useEffect(() => {
-    // 2. Navigation hazır değilse işlem yapma (Hata önleyici)
+    // 1. Navigasyon motoru tam hazır olmadan işlem yapma
     if (!rootNavigationState?.key) return;
     
+    // 2. Fontlar veya Auth yükleniyorsa bekle
     if (authLoading || !fontsLoaded) return;
 
-    const run = async () => {
-      const segment = segments[0];
-      const isIndex = segment === undefined;
+    const segment = segments[0];
+    const inAuthGroup = segment === '(tabs)' || segment === 'activate' || segment === 'manual-activation';
 
-      const isProtectedRoute =
-        segment === '(tabs)' || segment === 'manual-activation';
-
-      // 🔴 USER YOK (Çıkış Yapılmış)
-      if (!user) {
-        setIsReady(true); // Loading'i kapat
-
-        if (isProtectedRoute) {
-          // --- BURASI index.tsx'e ('/') YÖNLENDİRİR ---
-          router.replace('/');
-        }
-        return;
+    if (!user) {
+      // 🔴 Kullanıcı Çıkış Yapmış Durumda
+      setIsDbChecked(true); // Loading'i kapat
+      if (inAuthGroup) {
+        router.replace('/'); // Sadece içerideyken dışarı at
       }
+    } else {
+      // 🟢 Kullanıcı Giriş Yapmış Durumda -> Veritabanı Kontrolü
+      const checkUser = async () => {
+        try {
+          const ref = doc(db, 'users', user.uid);
+          const snap = await getDoc(ref);
+          const completed = snap.exists() && snap.data().registrationCompleted === true;
 
-      // 🟢 USER VAR -> DB KONTROL
-      try {
-        const ref = doc(db, 'users', user.uid);
-        const snap = await getDoc(ref);
-        const completed =
-          snap.exists() && snap.data().registrationCompleted === true;
-
-        if (!completed) {
-          if (isProtectedRoute) {
-            router.replace('/activate');
+          if (!completed) {
+            // Kayıt yarım kalmış, activate sayfasına yolla
+            if (segment !== 'activate') {
+              router.replace('/activate');
+            }
+          } else {
+            // Kayıt tamamsa ve yetkisiz sayfalardaysa (login, index) içeri al
+            if (!inAuthGroup) {
+              router.replace('/(tabs)');
+            }
           }
-        } else {
-          // Eğer login veya index sayfasındaysa (tabs)'e gönder
-          if (isIndex || segment === 'login') {
-            router.replace('/(tabs)');
-          }
+        } catch (error) {
+          console.error('DB Check error:', error);
+        } finally {
+          setIsDbChecked(true); // İşlem bitti, loading'i kapat
         }
-      } catch (e) {
-        console.error('DB error:', e);
-      } finally {
-        setIsReady(true);
-      }
-    };
+      };
 
-    run();
-  }, [user, authLoading, segments, fontsLoaded, rootNavigationState?.key]); // Key'i dinle
+      checkUser();
+    }
+  // ⚡ DİKKAT: Buradan 'segments' kelimesini sildik. Artık sayfa her değiştiğinde bu kod baştan çalışıp sonsuz döngü yaratmayacak!
+  }, [user, authLoading, fontsLoaded, rootNavigationState?.key]); 
 
 
-  if (!fontsLoaded || authLoading || !isReady) {
+  // --- YÜKLEME EKRANI ---
+  if (!fontsLoaded || authLoading || !isDbChecked) {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.iconContainer}>
@@ -105,24 +93,15 @@ function RootLayoutNav() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="scan" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="activate" options={{ headerShown: false }} />
-        <Stack.Screen name="register-tag" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="manual-activation"
-          options={{
-            headerShown: false,
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-      </Stack>
-    </View>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="scan" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="activate" />
+      <Stack.Screen name="register-tag" />
+      <Stack.Screen name="manual-activation" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+    </Stack>
   );
 }
 
@@ -137,15 +116,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  iconContainer: {
-    padding: 20,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 50,
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  iconContainer: { padding: 20, backgroundColor: '#EFF6FF', borderRadius: 50 },
 });
