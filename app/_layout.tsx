@@ -76,32 +76,34 @@ function RootLayoutNav() {
 
       checkUser();
     }
-  // ⚡ DİKKAT: Buradan 'segments' kelimesini sildik. Artık sayfa her değiştiğinde bu kod baştan çalışıp sonsuz döngü yaratmayacak!
-  }, [user, authLoading, fontsLoaded, rootNavigationState?.key]); 
+  }, [user, authLoading, fontsLoaded, rootNavigationState?.key, segments]); 
 
-
-  // --- YÜKLEME EKRANI ---
-  if (!fontsLoaded || authLoading || !isDbChecked) {
-    return (
-      <View style={styles.loadingContainer}>
-        <View style={styles.iconContainer}>
-          <QrCode size={64} color="#2563EB" />
-        </View>
-        <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 24 }} />
-      </View>
-    );
-  }
+  // --- YÜKLEME DURUMU ---
+  const isLoading = !fontsLoaded || authLoading || !isDbChecked;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="scan" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="activate" />
-      <Stack.Screen name="register-tag" />
-      <Stack.Screen name="manual-activation" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      {/* 1. İSKELET ASLA SİLİNMEZ: Yükleme bitmese bile altta gizlice çalışır */}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="scan" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="activate" />
+        <Stack.Screen name="register-tag" />
+        <Stack.Screen name="manual-activation" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+      </Stack>
+
+      {/* 2. YÜKLEME PERDESİ: İskeletin üstünü tamamen kaplayan yükleme ekranı */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.iconContainer}>
+            <QrCode size={64} color="#2563EB" />
+          </View>
+          <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 24 }} />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -116,6 +118,17 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
-  iconContainer: { padding: 20, backgroundColor: '#EFF6FF', borderRadius: 50 },
+  // Bu stil yükleme ekranını ana ekranın tam üstüne yapıştırır
+  loadingOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#FFFFFF',
+    zIndex: 999 
+  },
+  iconContainer: { 
+    padding: 20, 
+    backgroundColor: '#EFF6FF', 
+    borderRadius: 50 
+  },
 });
